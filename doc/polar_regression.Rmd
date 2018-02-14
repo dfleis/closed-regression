@@ -1,0 +1,162 @@
+---
+title: "An Exploration of 'Polar' Regression"
+subtitle: "A better label for this topic is desired..."
+author: "David Fleischer"
+date: "Last Update: `r format(Sys.time(), '%d %B, %Y')`"
+output: pdf_document
+header-includes:
+   - \usepackage{amsmath,amsthm,amssymb,mathtools}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(124)
+```
+
+\newcommand{\R}{\mathbb R}
+\newcommand{\E}{\mathbb E}
+\newcommand{\X}{\mathbb X}
+\newcommand{\eps}{\varepsilon}
+\newcommand{\argmin}{\text{arg min\,}}
+
+# Introduction
+
+## (Ordinary) Linear Regression
+We recall that in linear regression we assume our responses $Y \in \R^n$ are *linearly* related to our $\X \in \R^{n\times p}$, i.e.,
+$$
+  Y = \X \beta + \eps, 
+$$
+
+such that $\beta \in \R^p$ and $\eps$ is some random perturbation with zero mean. Indeed, the typical problem of linear regression is the problem of solving for the ordinary least squares estimator of $\beta$, denoted by $\hat\beta^\text{OLS}$, given by
+$$
+  \hat\beta^\text{OLS} = \underset{\beta}{\argmin} \left\{ \lVert Y - \X\beta \rVert^2_2 \right\}.
+$$
+
+In the univariate case we typically visualize such a problem as the problem of finding a line of best fit across pairs $\{(x_i, y_i)\}^n_{i = 1}$. As a quick visual,
+```{r, echo = F, fig.align = 'center', fig.height = 3.75, fig.width = 4.5}
+n <- 50
+xmin <- 0
+xmax <- 1
+sigma <- 1
+b0 <- 5
+b1 <- 10
+
+x <- runif(n, xmin, xmax)
+eps <- rnorm(n, 0, sigma)
+
+y <- b0 + b1 * x + eps
+m1 <- lm(y ~ x)
+
+plot(NA, xlim = range(x), ylim = range(y), 
+     main = "Ordinary Linear Fit", 
+     xlab = 'x', ylab = 'y')
+points(y ~ x, pch = 21, cex = 0.75, bg = 'white')
+abline(m1, col = 'red')
+```
+
+## An Illustrative Example
+
+Consider the problem of finding a fit for the following points:
+```{r, echo = F, fig.align = 'center', fig.height = 3.75, fig.width = 4.5}
+n <- 150
+epsmin <- -1
+epsmax <- -epsmin
+  
+theta <- sort(runif(n, 0, 2 * pi))
+eps <- runif(n, epsmin, epsmax)
+
+rtrue <- function(theta) {
+  5 + theta * (theta - 2 * pi) * 
+  (0.23 * sin(03 * theta) + 
+   0.21 * sin(04 * theta) + 
+   0.07 * sin(07 * theta) + 
+   0.05 * sin(11 * theta))
+}
+r <- rtrue(theta) + eps
+
+x <- r * cos(theta)
+y <- r * sin(theta)
+
+plot(NA, xlim = range(c(x, y)), ylim = range(c(x, y)),
+     xlab = 'x', ylab = 'y')
+abline(h = 0, v = 0, col = 'gray50')
+points(y ~ x, pch = 21, bg = 'white', cex = 0.75)
+```
+
+Clearly such a problem is ill-suited for the tools of linear regression. Computing a linear fit on our points $\{(x_i, y_i)\}^n_{i = 1}$ generates the disastrous fit
+```{r, echo = F, fig.align = 'center', fig.height = 3.75, fig.width = 4.5}
+m2 <- lm(y ~ x)
+
+plot(NA, xlim = range(c(x, y)), ylim = range(c(x, y)),
+     xlab = 'x', ylab = 'y')
+abline(h = 0, v = 0, col = 'gray50')
+points(y ~ x, pch = 21, bg = 'white', cex = 0.75)
+abline(m2, col = 'red')
+```
+
+
+Despite not being a *linear* relationship, it's clear to the practitioner that some radial relationship exists as we traverse through a rotation about the origin.
+
+## Attacking the Problem through Polar Coordinates
+
+An immediate problem highlighted by the above example is that our linear model attempts to fit a linear function to data that almost certainly cannot describe a function. One remedy to this problem is to consider the Cartesian-to-polar transformation
+\begin{align*}
+  r &= \sqrt{x^2 + y^2} \\
+  \theta &=
+  \begin{cases}
+    \arctan \left(\frac{y}{x}\right) & \text{if } x > 0, y > 0, \\
+    \arctan \left(\frac{y}{x}\right) + \pi & \text{if } x < 0, y > 0, \\
+    \arctan \left(\frac{y}{x}\right) + \pi & \text{if } x < 0, y < 0, \\
+    \arctan \left(\frac{y}{x}\right) + 2\pi & \text{if } x > 0, y < 0.
+  \end{cases}
+\end{align*}
+
+Under such a coordinate transformation may "unravel" our curve from Cartesian coordinates into points in polar coordinates. Using the above example we find our data to be better behaved (in the sense that the mean is now described by *some* function $r(\theta)$)
+```{r, echo = F, fig.align = 'center', fig.height = 3.75, fig.width = 4.5}
+plot(r ~ theta, xlab = expression(theta), pch = 21, bg = 'white', cex = 0.75,
+     ylim = c(0, max(r)))
+```
+
+In this coordinate system, our noisy data can be modelled by a relationship of the form
+\begin{align*}
+  r &= f(\theta) + \eps, \\
+  \text{subject to } &f(0) = f(2\pi),
+\end{align*}
+
+where the additional constraint $f(0) = f(2\pi)$ ensures that our curve in polar coordinates desribes a closed curve in Cartesian coordinates. In our running example, our function $r = r(\theta)$ was given by
+$$
+  r(\theta) = 5 + \theta (\theta - 2 \pi)
+  (0.23\sin(3\theta) + 
+  0.21\sin(4\theta) + 
+  0.07\sin(7\theta) + 
+  0.05\sin(11\theta)) + \eps
+$$
+
+for $\eps \sim \mathcal U(-1, 1)$, whose mean function $\E\left[r\,|\,\theta\right]$ is plotted below:
+```{r, echo = F, fig.align = 'center', fig.height = 3.75, fig.width = 3.5, fig.show = 'hold'}
+theta <- seq(0, 2 * pi, length.out = 1e3)
+r <- rtrue(theta)
+
+x <- r * cos(theta)
+y <- r * sin(theta)
+plot(NA, xlim = c(0, 2 * pi), ylim = c(0, max(r)), 
+     xlab = expression(theta), ylab = expression(r))
+abline(h = 0, col = 'gray50')
+abline(v = 0, col = 'gray50')
+lines(r ~ theta)
+
+plot(NA, xlim = range(c(x,y)), ylim = range(c(x, y)),
+     xlab = 'x', ylab = 'y')
+abline(h = 0, col = 'gray50')
+abline(v = 0, col = 'gray50')
+lines(y ~ x)
+```
+
+
+
+
+
+
+
+
+
